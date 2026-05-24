@@ -1,0 +1,49 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Wails build output (keep build/ itself — icons + installer config live there)
+build/bin/
+
+# Test binary, built with `go test -c`
+*.test
+
+# Output of the go coverage tool
+*.out
+
+# Go workspace file
+go.work
+
+# Dependency directories
+vendor/
+
+# Node modules
+node_modules/
+frontend/node_modules/
+
+# Frontend build output
+frontend/dist/
+frontend/.cache/
+frontend/.vite/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE / tooling
+.vscode/
+.idea/
+.claude/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
