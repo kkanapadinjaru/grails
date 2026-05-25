@@ -1,35 +1,50 @@
 # Build Directory
 
-The build directory is used to house all the build files and assets for your application. 
+Build assets and platform-specific files for Grails.
 
-The structure is:
+## Structure
 
-* bin - Output directory
-* darwin - macOS specific files
-* windows - Windows specific files
+```
+build/
+├── bin/              # Compiled output (grails.exe)
+├── darwin/           # macOS plist files
+├── windows/          # Windows manifest, icon, installer scripts
+│   ├── icon.ico          # Auto-generated from appicon.png
+│   ├── info.json         # App metadata (version, copyright, etc.)
+│   ├── wails.exe.manifest
+│   └── installer/        # NSIS installer scripts
+└── appicon.png       # Source icon (256x256) — used to generate platform icons
+```
 
-## Mac
+## Icon
 
-The `darwin` directory holds files specific to Mac builds.
-These may be customised and used as part of the build. To return these files to the default state, simply delete them
-and
-build with `wails build`.
+`appicon.png` is the source icon. On build, Wails generates `windows/icon.ico` from it automatically. To update the app icon, replace `appicon.png` and rebuild.
 
-The directory contains the following files:
+Requirements:
+- 256x256 PNG
+- Transparent background recommended (for visibility on both dark and light OS themes)
+- Graphic should fill ~85-90% of the canvas
 
-- `Info.plist` - the main plist file used for Mac builds. It is used when building using `wails build`.
-- `Info.dev.plist` - same as the main plist file but used when building using `wails dev`.
+## Building
 
-## Windows
+From the project root:
 
-The `windows` directory contains the manifest and rc files used when building with `wails build`.
-These may be customised for your application. To return these files to the default state, simply delete them and
-build with `wails build`.
+```bash
+# Development
+wails dev
 
-- `icon.ico` - The icon used for the application. This is used when building using `wails build`. If you wish to
-  use a different icon, simply replace this file with your own. If it is missing, a new `icon.ico` file
-  will be created using the `appicon.png` file in the build directory.
-- `installer/*` - The files used to create the Windows installer. These are used when building using `wails build`.
-- `info.json` - Application details used for Windows builds. The data here will be used by the Windows installer,
-  as well as the application itself (right click the exe -> properties -> details)
-- `wails.exe.manifest` - The main application manifest file.
+# Production (Windows, compressed with UPX)
+wails build -clean -trimpath -ldflags "-s -w -H windowsgui" -tags "production" -upx
+```
+
+## Windows Installer
+
+The `windows/installer/` directory contains NSIS scripts for generating a Windows installer. Run `wails build -nsis` to produce an installer executable alongside the main binary.
+
+## Metadata
+
+Edit `windows/info.json` to update:
+- Application name and description
+- Version number
+- Company name
+- Copyright
