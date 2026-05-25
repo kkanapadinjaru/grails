@@ -50,7 +50,16 @@ let nextHistoryId = 1
 // Per-service auth requirement override. When a service is toggled to
 // "not required", we skip the login modal and send without a token.
 // Keyed by service displayName. `true` = auth required (default), `false` = skip.
-export const authOverrides = $state({})
+const AUTH_OVERRIDES_KEY = 'grails:authOverrides'
+
+function loadAuthOverrides() {
+  try {
+    const raw = localStorage.getItem(AUTH_OVERRIDES_KEY)
+    return raw ? JSON.parse(raw) : {}
+  } catch { return {} }
+}
+
+export const authOverrides = $state(loadAuthOverrides())
 
 export function isAuthRequired(serviceName) {
   if (!(serviceName in authOverrides)) return true
@@ -61,6 +70,7 @@ export function toggleAuthRequired(serviceName) {
   if (!serviceName) return
   const current = isAuthRequired(serviceName)
   authOverrides[serviceName] = !current
+  localStorage.setItem(AUTH_OVERRIDES_KEY, JSON.stringify(authOverrides))
 }
 
 // Per-(service,method) request body cache so user edits survive method
