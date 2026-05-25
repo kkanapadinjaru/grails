@@ -3,7 +3,7 @@
   import { ui } from '../stores/settings.svelte.js'
 </script>
 
-<div class="transition-all duration-300 {ui.isHistoryPanelOpen ? 'w-80' : 'w-8'} bg-white dark:bg-gray-800 border-l border-gray-200 dark:border-gray-700 flex shrink-0">
+<div class="transition-all duration-300 {ui.isHistoryPanelOpen ? 'w-80' : 'w-8'} bg-bg-light dark:bg-bg-dark border-l border-gray-200 dark:border-gray-700 flex shrink-0">
   <button
     onclick={() => ui.isHistoryPanelOpen = !ui.isHistoryPanelOpen}
     class="w-8 h-full flex items-center justify-center hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
@@ -34,7 +34,7 @@
             onclick={() => replayHistoryEntry(entry)}
             role="button"
             tabindex="0"
-            class="p-2 rounded cursor-pointer border-l-2 {entry.isError ? 'border-red-500 bg-red-50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20' : 'border-green-500 bg-gray-50 dark:bg-gray-700 hover:bg-gray-100 dark:hover:bg-gray-600'}"
+            class="p-2 rounded cursor-pointer border-l-2 {entry.isError ? 'border-red-500 bg-red-50 dark:bg-red-900/10 hover:bg-red-100 dark:hover:bg-red-900/20' : 'border-green-500 bg-sidebar-light dark:bg-sidebar-dark hover:bg-gray-100 dark:hover:bg-hi-dark'}"
             title={`${entry.serviceName || ''}.${entry.method} → ${entry.localAddress || ''}`}
           >
             <div class="flex items-center justify-between">

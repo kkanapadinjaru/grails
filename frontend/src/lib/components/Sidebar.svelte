@@ -27,7 +27,7 @@
     <select
       value={connection.selectedService}
       onchange={(e) => selectService(e.currentTarget.value)}
-      class="w-full px-3 py-1.5 text-sm bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-gray-100"
+      class="w-full px-3 py-1.5 text-sm bg-bg-light dark:bg-bg-dark border border-gray-300 dark:border-gray-600 rounded-md text-text-light dark:text-text-dark"
       disabled={!connection.connectedContext || connection.services.length === 0}
     >
       {#if connection.services.length === 0}
@@ -60,7 +60,7 @@
           type="text"
           bind:value={methodFilter}
           placeholder="Filter methods..."
-          class="w-full pl-7 pr-7 py-1.5 text-xs bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900 dark:text-gray-100"
+          class="w-full pl-7 pr-7 py-1.5 text-xs bg-bg-light dark:bg-bg-dark border border-gray-300 dark:border-gray-600 rounded-md text-text-light dark:text-text-dark"
         />
         <svg class="absolute left-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-4.35-4.35M11 19a8 8 0 100-16 8 8 0 000 16z" />
@@ -88,7 +88,7 @@
           onclick={() => selectMethod(method.name)}
           role="button"
           tabindex="0"
-          class="w-full text-left px-4 py-2 text-sm cursor-pointer transition-colors {connection.selectedMethod === method.name ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 border-l-4 border-blue-500' : 'text-text-light dark:text-text-dark hover:bg-gray-50 dark:hover:bg-gray-700'}"
+          class="w-full text-left px-4 py-2 text-sm cursor-pointer transition-colors {connection.selectedMethod === method.name ? 'bg-hi-light dark:bg-hi-dark text-btn-light dark:text-btn-dark border-l-4 border-btn-light dark:border-btn-dark' : 'text-text-light dark:text-text-dark hover:bg-hi-light dark:hover:bg-hi-dark'}"
         >
           <div class="text-sm font-medium">{method.name}</div>
           {#if method.requestType || method.responseType}

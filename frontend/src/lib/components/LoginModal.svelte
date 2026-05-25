@@ -100,7 +100,7 @@
           </button>
           <button
             onclick={openSettings}
-            class="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-md"
+            class="flex-1 px-4 py-2 bg-btn-light dark:bg-btn-dark hover:opacity-90 text-white text-sm rounded-md"
           >
             Open Settings
           </button>
@@ -114,7 +114,7 @@
                 type="text"
                 bind:value={subdomain}
                 onblur={previewRealm}
-                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
                 placeholder="acme"
               />
               {#if resolvingRealm}
@@ -132,7 +132,7 @@
             <input
               type="text"
               bind:value={username}
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
               placeholder="Enter username"
             />
           </div>
@@ -142,7 +142,7 @@
               type="password"
               bind:value={password}
               onkeydown={(e) => { if (e.key === 'Enter') submit() }}
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
               placeholder="Enter password"
             />
           </div>
@@ -159,7 +159,7 @@
             <button
               onclick={submit}
               disabled={auth.isGeneratingToken || !canSubmit}
-              class="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm rounded-md"
+              class="flex-1 px-4 py-2 bg-btn-light dark:bg-btn-dark hover:opacity-90 disabled:bg-gray-400 disabled:cursor-not-allowed text-white text-sm rounded-md"
             >
               {auth.isGeneratingToken ? 'Signing in…' : 'Sign In'}
             </button>

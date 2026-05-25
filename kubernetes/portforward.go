@@ -9,6 +9,8 @@ import (
 	"os/exec"
 	"sync"
 	"time"
+
+	"grails/cmdutil"
 )
 
 // PortAllocator hands out free TCP ports within a configured range. It tracks
@@ -152,6 +154,7 @@ func (pf *PortForward) Start() error {
 			fmt.Sprintf("%d:%d", port, pf.remotePort),
 		)
 		cmd := exec.Command("kubectl", args...)
+		cmdutil.HideWindow(cmd)
 
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {

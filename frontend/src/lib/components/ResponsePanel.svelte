@@ -14,7 +14,7 @@
   }
 </script>
 
-<div class="flex-1 bg-white dark:bg-gray-800 flex flex-col min-h-0">
+<div class="flex-1 bg-bg-light dark:bg-bg-dark flex flex-col min-h-0">
   <div class="p-6 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between shrink-0">
     <h3 class="text-sm font-semibold text-text-light dark:text-text-dark">Response</h3>
     <button
@@ -40,8 +40,8 @@
           <span class="text-xs font-medium text-text-light dark:text-text-dark">{connection.responseTime || '—'}</span>
         </div>
       </div>
-      <div class="flex-1 p-3 bg-gray-50 dark:bg-gray-700 rounded-md overflow-auto">
-        <pre class="text-xs text-gray-900 dark:text-white font-mono whitespace-pre-wrap">{connection.response || 'No response yet'}</pre>
+      <div class="flex-1 p-3 bg-sidebar-light dark:bg-sidebar-dark rounded-md overflow-auto">
+        <pre class="text-sm text-text-light dark:text-text-dark font-mono whitespace-pre-wrap">{connection.response || 'No response yet'}</pre>
       </div>
     </div>
   </div>

@@ -36,10 +36,35 @@
   function dismissMenus() {
     auth.showUserMenu = false
   }
+
+  // Resizable split pane state
+  let splitPercent = $state(50)
+  let dragging = $state(false)
+  let containerEl = $state(null)
+
+  function onGutterDown(e) {
+    e.preventDefault()
+    dragging = true
+    document.addEventListener('mousemove', onDrag)
+    document.addEventListener('mouseup', onDragEnd)
+  }
+
+  function onDrag(e) {
+    if (!dragging || !containerEl) return
+    const rect = containerEl.getBoundingClientRect()
+    const pct = ((e.clientX - rect.left) / rect.width) * 100
+    splitPercent = Math.min(70, Math.max(25, pct))
+  }
+
+  function onDragEnd() {
+    dragging = false
+    document.removeEventListener('mousemove', onDrag)
+    document.removeEventListener('mouseup', onDragEnd)
+  }
 </script>
 
 <div
-  class="h-screen w-screen bg-bg-light dark:bg-bg-dark flex flex-col overflow-hidden"
+  class="h-screen w-screen bg-bg-light dark:bg-bg-dark flex flex-col overflow-hidden {dragging ? 'select-none' : ''}"
   onclick={dismissMenus}
   role="presentation"
 >
@@ -48,9 +73,17 @@
   <div class="flex-1 flex overflow-hidden relative min-h-0">
     <Sidebar />
     <main class="flex-1 flex flex-col bg-gray-50 dark:bg-gray-900 min-w-0">
-      <div class="flex-1 flex min-h-0">
-        <RequestPanel />
-        <ResponsePanel />
+      <div class="flex-1 flex min-h-0" bind:this={containerEl}>
+        <div style="width: {splitPercent}%; min-width: 0;" class="flex">
+          <RequestPanel />
+        </div>
+        <div
+          onmousedown={onGutterDown}
+          class="w-1 shrink-0 cursor-col-resize hover:bg-btn-light dark:hover:bg-btn-dark transition-colors {dragging ? 'bg-btn-light dark:bg-btn-dark' : 'bg-gray-200 dark:bg-gray-700'}"
+        ></div>
+        <div style="width: {100 - splitPercent}%; min-width: 0;" class="flex">
+          <ResponsePanel />
+        </div>
       </div>
     </main>
     <HistoryPanel />

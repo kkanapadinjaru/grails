@@ -13,11 +13,9 @@
 
   function levelColor(level) {
     switch (level) {
-      case 'error': return 'text-red-400'
-      case 'warning': return 'text-yellow-400'
-      case 'info': return 'text-blue-400'
-      case 'debug': return 'text-gray-400'
-      default: return 'text-gray-400'
+      case 'error': return 'text-red-600 dark:text-red-400'
+      case 'warning': return 'text-yellow-600 dark:text-yellow-400'
+      default: return 'text-text-light dark:text-text-dark'
     }
   }
 
@@ -26,12 +24,12 @@
   }
 </script>
 
-<div class="border-t border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-800 shrink-0">
+<div class="border-t border-gray-200 dark:border-gray-700 bg-bg-light dark:bg-bg-dark shrink-0">
   <div
     onclick={() => isExpanded = !isExpanded}
     role="button"
     tabindex="0"
-    class="flex items-center justify-between px-6 py-2 cursor-pointer transition-colors select-none {hasError ? 'bg-red-50 dark:bg-red-900/20' : 'bg-white dark:bg-gray-800'} hover:bg-gray-50 dark:hover:bg-gray-700/50"
+    class="flex items-center justify-between px-6 py-2 cursor-pointer transition-colors select-none {hasError ? 'bg-red-50 dark:bg-red-900/20' : 'bg-bg-light dark:bg-bg-dark'} hover:bg-sidebar-light dark:hover:bg-sidebar-dark"
     style="min-height: 36px;"
   >
     <div class="flex items-center justify-between w-full text-xs text-gray-900 dark:text-white">
@@ -55,12 +53,12 @@
 
   {#if isExpanded}
     <div class="border-t border-gray-200 dark:border-gray-700">
-      <div class="flex items-center justify-between p-2 bg-gray-50 dark:bg-gray-900/50 border-b border-gray-200 dark:border-gray-700">
+      <div class="flex items-center justify-between p-2 bg-sidebar-light dark:bg-sidebar-dark border-b border-gray-200 dark:border-gray-700">
         <div class="flex items-center space-x-2">
           <label class="text-xs text-gray-900 dark:text-white">Filter:</label>
           <select
             bind:value={filter}
-            class="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+            class="text-xs px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark"
           >
             <option value="all">All</option>
             <option value="error">Errors</option>
@@ -80,14 +78,14 @@
         </button>
       </div>
 
-      <div class="p-3 bg-white dark:bg-gray-900 max-h-48 overflow-y-auto font-mono text-xs">
+      <div class="p-3 bg-bg-light dark:bg-bg-dark max-h-48 overflow-y-auto font-mono text-sm">
         {#if filtered.length === 0}
           <div class="text-center text-gray-500 dark:text-gray-400 py-4">No logs</div>
         {:else}
           {#each filtered as entry (entry.id)}
             <div class="{levelColor(entry.level)} mb-1">
-              <span class="text-gray-500 dark:text-gray-400">[{fmt(entry.timestamp)}]</span>
-              <span class="ml-2 text-gray-900 dark:text-white">{entry.message}</span>
+              <span class="opacity-60">[{fmt(entry.timestamp)}]</span>
+              <span class="ml-2">{entry.message}</span>
             </div>
           {/each}
         {/if}

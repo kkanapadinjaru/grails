@@ -8,6 +8,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"grails/cmdutil"
 )
 
 // MethodDescription represents the description of a gRPC method including request and response types
@@ -35,7 +37,8 @@ var httpFieldBindingRe = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_.]*)=([^{}]+
 func runGrpcurl(args ...string) (string, error) {
 	// Add timeout context to prevent hanging
 	cmd := exec.Command("grpcurl", args...)
-	
+	cmdutil.HideWindow(cmd)
+
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
@@ -198,11 +201,12 @@ func SendGrpcRequest(address, serviceName, methodName, requestJSON, bearerToken 
 	
 	// Add timeout context to prevent hanging
 	cmd := exec.Command("grpcurl", args...)
-	
+	cmdutil.HideWindow(cmd)
+
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	
+
 	// Let's use a timeout for safety
 	errChan := make(chan error, 1)
 	go func() {

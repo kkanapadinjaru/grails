@@ -18,18 +18,18 @@
   --color-hi-dark: #1d2d55;
 }
 
-/* One Dark Pro — Atom / VS Code's iconic palette. */
-:root[data-palette="one-dark-pro"] {
-  --color-bg-light: #fafafa;
-  --color-bg-dark: #282c34;
-  --color-sidebar-light: #f0f0f0;
-  --color-sidebar-dark: #21252b;
-  --color-text-light: #383a42;
-  --color-text-dark: #abb2bf;
-  --color-btn-light: #4078f2;
-  --color-btn-dark: #61afef;
-  --color-hi-light: #d2e0fb;
-  --color-hi-dark: #2c313a;
+/* Jungle — olive, silver and rust. */
+:root[data-palette="jungle"] {
+  --color-bg-light: #c0c0c0;
+  --color-bg-dark: #2b2b2b;
+  --color-sidebar-light: #a8a8a8;
+  --color-sidebar-dark: #353535;
+  --color-text-light: #2b2b2b;
+  --color-text-dark: #c0c0c0;
+  --color-btn-light: #a52a2a;
+  --color-btn-dark: #8a795d;
+  --color-hi-light: #d9d9d9;
+  --color-hi-dark: #5d6d55;
 }
 
 /* Tokyo Night — Folke's deep-navy palette. Light variant is Tokyo Night Day. */
@@ -87,8 +87,8 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-code, pre, textarea.font-mono {
-  font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+code, pre, .font-mono {
+  font-family: 'Geist Mono', 'JetBrains Mono', 'Cascadia Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 ::-webkit-scrollbar {
@@ -111,4 +111,23 @@ code, pre, textarea.font-mono {
 
 ::-webkit-scrollbar-thumb:hover {
   background: #555;
+}
+
+::selection {
+  background: var(--color-hi-light);
+  color: var(--color-text-light);
+}
+
+.dark ::selection {
+  background: var(--color-hi-dark);
+  color: var(--color-text-dark);
+}
+
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--color-btn-light);
+}
+
+.dark input:focus, .dark select:focus, .dark textarea:focus {
+  box-shadow: 0 0 0 2px var(--color-btn-dark);
 }

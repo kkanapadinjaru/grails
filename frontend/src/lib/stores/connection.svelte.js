@@ -47,6 +47,22 @@ export const history = $state({ entries: [] })
 
 let nextHistoryId = 1
 
+// Per-service auth requirement override. When a service is toggled to
+// "not required", we skip the login modal and send without a token.
+// Keyed by service displayName. `true` = auth required (default), `false` = skip.
+export const authOverrides = $state({})
+
+export function isAuthRequired(serviceName) {
+  if (!(serviceName in authOverrides)) return true
+  return authOverrides[serviceName]
+}
+
+export function toggleAuthRequired(serviceName) {
+  if (!serviceName) return
+  const current = isAuthRequired(serviceName)
+  authOverrides[serviceName] = !current
+}
+
 // Per-(service,method) request body cache so user edits survive method
 // switching within a session. Keyed by `${service.displayName}::${method}`.
 const bodyCache = new Map()
@@ -262,7 +278,7 @@ export async function sendRequest() {
       svc.serviceName,
       connection.selectedMethod,
       connection.requestBody || '{}',
-      auth.bearerToken || '',
+      isAuthRequired(connection.selectedService) ? (auth.bearerToken || '') : '',
     )
   } catch (err) {
     isError = true

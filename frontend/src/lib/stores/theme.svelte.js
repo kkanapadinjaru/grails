@@ -13,10 +13,10 @@ export const PALETTES = [
     swatch: ['#24273a', '#1e2030', '#8aadf4'],
   },
   {
-    id: 'one-dark-pro',
-    name: 'One Dark Pro',
-    blurb: 'Atom / VS Code — slate with cool blue.',
-    swatch: ['#282c34', '#21252b', '#61afef'],
+    id: 'jungle',
+    name: 'Jungle',
+    blurb: 'Olive, silver & rust.',
+    swatch: ['#2b2b2b', '#5d6d55', '#8a795d'],
   },
   {
     id: 'tokyo-night',

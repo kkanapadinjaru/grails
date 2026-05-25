@@ -26,7 +26,10 @@
   let excludePatternsText = $state('')
   let parentClaimMapText = $state('')
   let endpoints = $state([])
+  let themeExpanded = $state(false)
+  let diagnosticsExpanded = $state(false)
   let expandedIdx = $state(-1)
+  let claimMapExpanded = $state(false)
 
   // Re-sync the editable text fields whenever the modal opens so they reflect the
   // latest persisted values.
@@ -40,6 +43,9 @@
         .join(', ')
       endpoints = (settings.authEndpoints || []).map(e => ({ ...e }))
       expandedIdx = -1
+      themeExpanded = false
+      diagnosticsExpanded = false
+      claimMapExpanded = false
     }
   })
 
@@ -103,11 +109,19 @@
 
 {#if ui.showProfile}
   <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-bg-light dark:bg-sidebar-dark rounded-lg p-6 w-[44rem] shadow-xl max-h-[90vh] overflow-y-auto" onclick={(e) => e.stopPropagation()}>
+    <div class="bg-bg-light dark:bg-sidebar-dark rounded-lg p-6 w-[48rem] shadow-xl max-h-[90vh] overflow-y-auto" onclick={(e) => e.stopPropagation()}>
       <h2 class="text-lg font-semibold text-text-light dark:text-text-dark mb-4">Settings</h2>
       <div class="space-y-4">
         <div>
-          <label class="block text-sm font-medium text-text-light dark:text-text-dark mb-2">Theme palette</label>
+          <button
+            type="button"
+            onclick={() => themeExpanded = !themeExpanded}
+            class="flex items-center justify-between w-full text-sm font-medium text-text-light dark:text-text-dark mb-2"
+          >
+            <span>Theme palette · {PALETTES.find(p => p.id === theme.palette)?.name || theme.palette}</span>
+            <span class="text-xs">{themeExpanded ? '▾' : '▸'}</span>
+          </button>
+          {#if themeExpanded}
           <div class="grid grid-cols-2 gap-2">
             {#each PALETTES as p (p.id)}
               <button
@@ -131,6 +145,7 @@
             {/each}
           </div>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Each palette has a light and dark variant — toggle with the sun/moon button in the header.</p>
+          {/if}
         </div>
 
         <div class="border-t border-gray-300 dark:border-gray-600 pt-4">
@@ -138,7 +153,7 @@
           <input
             type="text"
             bind:value={namespacesText}
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
           />
         </div>
 
@@ -148,7 +163,7 @@
             <input
               type="number"
               bind:value={settings.portRangeStart}
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
             />
           </div>
           <div>
@@ -156,7 +171,7 @@
             <input
               type="number"
               bind:value={settings.portRangeEnd}
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
             />
           </div>
         </div>
@@ -167,7 +182,7 @@
             <input
               type="text"
               bind:value={grpcPortsText}
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
             />
           </div>
           <div>
@@ -177,7 +192,7 @@
               min="1"
               max="32"
               bind:value={settings.discoveryConcurrency}
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
             />
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Parallel port-forwards per namespace scan (default 5).</p>
           </div>
@@ -189,7 +204,7 @@
             <input
               type="text"
               bind:value={excludePatternsText}
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
               placeholder="*wassups, *-lb"
             />
             <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Skip k8s services whose name, app label, or selector value matches (case-insensitive).</p>
@@ -199,7 +214,7 @@
             <input
               type="text"
               bind:value={settings.nodePortHost}
-              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+              class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
             />
           </div>
         </div>
@@ -213,7 +228,7 @@
                 <label class="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Provider</label>
                 <select
                   bind:value={settings.authProvider}
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
                 >
                   <option value="keycloak">Keycloak</option>
                   <option value="auth0" disabled>Auth0 (coming soon)</option>
@@ -224,7 +239,7 @@
                 <input
                   type="text"
                   bind:value={settings.clientId}
-                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                  class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
                 />
               </div>
             </div>
@@ -263,7 +278,7 @@
                             <label class="block text-xs text-gray-500 dark:text-gray-400 mb-1">Cluster</label>
                             <select
                               bind:value={ep.cluster}
-                              class="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                              class="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
                             >
                               {#if ep.cluster && !(connection.clusters || []).some(c => c.context === ep.cluster)}
                                 <option value={ep.cluster}>{ep.cluster} (not in kubeconfig)</option>
@@ -281,7 +296,7 @@
                             <input
                               type="text"
                               bind:value={ep.namespace}
-                              class="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                              class="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
                               placeholder="* or namespace"
                             />
                           </div>
@@ -291,7 +306,7 @@
                           <input
                             type="text"
                             bind:value={ep.tokenUrl}
-                            class="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                            class="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
                             placeholder="https://kc/realms/{`{realm}`}/protocol/openid-connect/token"
                           />
                           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">{`{realm}`} is substituted from the resolver below; otherwise used verbatim.</p>
@@ -301,7 +316,7 @@
                           <input
                             type="text"
                             bind:value={ep.realmResolverUrl}
-                            class="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                            class="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
                             placeholder="https://owner.api/owners/{`{subdomain}`}"
                           />
                           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Leave empty if Token URL has no {`{realm}`}.</p>
@@ -311,7 +326,7 @@
                           <input
                             type="text"
                             bind:value={ep.realmJsonPath}
-                            class="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                            class="w-full px-2 py-1 border border-gray-300 dark:border-gray-600 rounded bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
                             placeholder="realm or data.realm"
                           />
                         </div>
@@ -335,18 +350,35 @@
         </div>
 
         <div>
-          <label class="block text-sm font-medium text-text-light dark:text-text-dark mb-1">Parent claim map (prefix=claim, comma-separated)</label>
+          <button
+            type="button"
+            onclick={() => claimMapExpanded = !claimMapExpanded}
+            class="flex items-center justify-between w-full text-sm font-medium text-text-light dark:text-text-dark mb-1"
+          >
+            <span>Parent claim map</span>
+            <span class="text-xs">{claimMapExpanded ? '▾' : '▸'}</span>
+          </button>
+          {#if claimMapExpanded}
           <input
             type="text"
             bind:value={parentClaimMapText}
-            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+            class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-bg-light dark:bg-bg-dark text-text-light dark:text-text-dark text-sm"
             placeholder="o=owner_id, org=org_id"
           />
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">For methods with a (google.api.http) parent binding like {`{parent=o/*}`}, fill the wildcard from the named JWT claim.</p>
+          {/if}
         </div>
 
         <div class="border-t border-gray-300 dark:border-gray-600 pt-4">
-          <h3 class="text-sm font-semibold text-text-light dark:text-text-dark mb-2">Diagnostics</h3>
+          <button
+            type="button"
+            onclick={() => diagnosticsExpanded = !diagnosticsExpanded}
+            class="flex items-center justify-between w-full text-sm font-semibold text-text-light dark:text-text-dark mb-2"
+          >
+            <span>Diagnostics</span>
+            <span class="text-xs">{diagnosticsExpanded ? '▾' : '▸'}</span>
+          </button>
+          {#if diagnosticsExpanded}
           <div class="flex items-center justify-between">
             <div class="text-xs text-gray-500 dark:text-gray-400 truncate pr-3" title={logsFolder}>
               Logs: {logsFolder || '—'}
@@ -360,6 +392,7 @@
             </button>
           </div>
           <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Rolling file at 5 MB · keeps last 5 · 30-day retention.</p>
+          {/if}
         </div>
 
         <div class="flex space-x-3 pt-2">
@@ -371,7 +404,7 @@
           </button>
           <button
             onclick={save}
-            class="flex-1 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white text-sm rounded-md"
+            class="flex-1 px-4 py-2 bg-btn-light dark:bg-btn-dark hover:opacity-90 text-white text-sm rounded-md"
           >
             Save
           </button>

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"grails/cmdutil"
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
@@ -73,6 +74,7 @@ func OpenFolder(path string) error {
 	default:
 		cmd = exec.Command("xdg-open", path)
 	}
+	cmdutil.HideWindow(cmd)
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("opening %s: %w", path, err)
 	}
