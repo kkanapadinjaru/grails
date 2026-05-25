@@ -204,12 +204,12 @@ export async function selectMethod(methodName) {
 
 export async function generateSampleRequest() {
   const svc = connection.services.find(s => s.displayName === connection.selectedService)
-  if (!svc || !connection.requestType) {
+  if (!svc || !connection.selectedMethod) {
     addWarn('No method selected to generate sample for')
     return
   }
   try {
-    const sample = await GenerateSampleRequest(svc.localAddress, connection.requestType)
+    const sample = await GenerateSampleRequest(svc.localAddress, svc.serviceName, connection.selectedMethod)
     connection.requestBody = sample || '{}'
     bodyCache.set(`${svc.displayName}::${connection.selectedMethod}`, connection.requestBody)
     addInfo(`Generated sample request for ${connection.requestType}`)

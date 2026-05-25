@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os/exec"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -15,7 +16,21 @@ type MethodDescription struct {
 	RequestType  string
 	ResponseType string
 	RequestJSON  string // Pre-generated skeleton JSON
+
+	// ParentField and ParentPattern come from the (google.api.http) annotation,
+	// when one is present and binds a request field to a URL path with
+	// wildcards. For example, an annotation like
+	//   option (.google.api.http) = { get: "/v1/{parent=o/*/items/*}/things" };
+	// yields ParentField="parent", ParentPattern="o/*/items/*".
+	// Both are empty when the method has no such binding.
+	ParentField   string
+	ParentPattern string
 }
+
+// httpFieldBindingRe captures field/value pairs in google.api.http URL
+// patterns like `{parent=o/*}` or `{name=org/*/projects/*}`. The field name
+// may contain dots for nested fields.
+var httpFieldBindingRe = regexp.MustCompile(`\{([A-Za-z_][A-Za-z0-9_.]*)=([^{}]+)\}`)
 
 func runGrpcurl(args ...string) (string, error) {
 	// Add timeout context to prevent hanging
@@ -117,12 +132,34 @@ func DescribeMethod(address, serviceName, methodName string) (*MethodDescription
 	if reqType == "" || respType == "" {
 		return nil, fmt.Errorf("failed to parse method description from output: %s", output)
 	}
-	
+
+	parentField, parentPattern := extractParentBinding(output)
+
 	return &MethodDescription{
-		Name:         methodName,
-		RequestType:  reqType,
-		ResponseType: respType,
+		Name:          methodName,
+		RequestType:   reqType,
+		ResponseType:  respType,
+		ParentField:   parentField,
+		ParentPattern: parentPattern,
 	}, nil
+}
+
+// extractParentBinding scans the raw `grpcurl describe` output for the first
+// google.api.http URL field binding whose key is "parent" (or ends in
+// ".parent") and returns the field path and pattern. We prefer "parent" over
+// other captures because that's the conventional list/get binding for
+// tenant-scoped resources; if no parent binding is present, returns empty
+// strings so callers can skip pattern resolution.
+func extractParentBinding(describeOutput string) (string, string) {
+	matches := httpFieldBindingRe.FindAllStringSubmatch(describeOutput, -1)
+	for _, m := range matches {
+		field := m[1]
+		pattern := strings.TrimSpace(m[2])
+		if field == "parent" || strings.HasSuffix(field, ".parent") {
+			return field, pattern
+		}
+	}
+	return "", ""
 }
 
 // GenerateJsonSkeleton generates a JSON skeleton from a message description

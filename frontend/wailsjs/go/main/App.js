@@ -18,12 +18,16 @@ export function GenerateRequestSkeleton(arg1, arg2) {
   return window['go']['main']['App']['GenerateRequestSkeleton'](arg1, arg2);
 }
 
-export function GenerateSampleRequest(arg1, arg2) {
-  return window['go']['main']['App']['GenerateSampleRequest'](arg1, arg2);
+export function GenerateSampleRequest(arg1, arg2, arg3) {
+  return window['go']['main']['App']['GenerateSampleRequest'](arg1, arg2, arg3);
 }
 
 export function GetAccessibleNamespaces() {
   return window['go']['main']['App']['GetAccessibleNamespaces']();
+}
+
+export function GetActiveAuthEndpoint() {
+  return window['go']['main']['App']['GetActiveAuthEndpoint']();
 }
 
 export function GetAuthState() {
@@ -38,6 +42,10 @@ export function GetGrpcMethods(arg1, arg2) {
   return window['go']['main']['App']['GetGrpcMethods'](arg1, arg2);
 }
 
+export function GetLogsFolder() {
+  return window['go']['main']['App']['GetLogsFolder']();
+}
+
 export function GetSettings() {
   return window['go']['main']['App']['GetSettings']();
 }
@@ -46,16 +54,24 @@ export function IsConnected() {
   return window['go']['main']['App']['IsConnected']();
 }
 
-export function Login(arg1, arg2) {
-  return window['go']['main']['App']['Login'](arg1, arg2);
+export function Login(arg1, arg2, arg3) {
+  return window['go']['main']['App']['Login'](arg1, arg2, arg3);
 }
 
 export function Logout() {
   return window['go']['main']['App']['Logout']();
 }
 
+export function OpenLogsFolder() {
+  return window['go']['main']['App']['OpenLogsFolder']();
+}
+
 export function RefreshToken() {
   return window['go']['main']['App']['RefreshToken']();
+}
+
+export function ResolveRealm(arg1) {
+  return window['go']['main']['App']['ResolveRealm'](arg1);
 }
 
 export function SaveSettings(arg1) {

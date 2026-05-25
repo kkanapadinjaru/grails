@@ -14,6 +14,7 @@ import (
 	"grails/config"
 	grpcrefl "grails/grpc"
 	"grails/kubernetes"
+	"grails/logging"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 	k8s "k8s.io/client-go/kubernetes"
@@ -93,6 +94,7 @@ type App struct {
 	currentClientset  *k8s.Clientset
 	currentRestConfig *rest.Config
 	currentContext    string
+	currentNamespace  string
 	accessibleNs      []string
 	cfg               config.Config
 
@@ -106,6 +108,7 @@ type App struct {
 
 	token       auth.TokenSet
 	tokenUser   string
+	tokenURL    string // resolved (post-{realm}-substitution) URL used for refresh
 	refreshStop chan struct{}
 }
 
@@ -198,12 +201,20 @@ func isHostPortListening(port int) bool {
 func (a *App) ConnectToCluster(contextName string) ([]NamespaceInfo, error) {
 	log.Printf("[ConnectToCluster] Connecting to context %q", contextName)
 
+	a.mu.Lock()
+	previousContext := a.currentContext
+	a.mu.Unlock()
+	if previousContext != "" && previousContext != contextName {
+		a.invalidateToken("cluster-switch")
+	}
+
 	if contextName == hostContextID {
 		a.mu.Lock()
 		a.hostMode = true
 		a.currentClientset = nil
 		a.currentRestConfig = nil
 		a.currentContext = hostContextID
+		a.currentNamespace = ""
 		a.accessibleNs = []string{hostNamespace}
 		a.mu.Unlock()
 		log.Println("[ConnectToCluster] Host machine mode active (kubeconfig bypassed)")
@@ -227,6 +238,7 @@ func (a *App) ConnectToCluster(contextName string) ([]NamespaceInfo, error) {
 	a.currentClientset = clientset
 	a.currentRestConfig = restCfg
 	a.currentContext = contextName
+	a.currentNamespace = ""
 	a.hostMode = false
 	configured := append([]string(nil), a.cfg.Namespaces...)
 	a.mu.Unlock()
@@ -256,11 +268,13 @@ func (a *App) ConnectToCluster(contextName string) ([]NamespaceInfo, error) {
 // DisconnectFromCluster tears down any active port-forwards and clears cached
 // cluster state.
 func (a *App) DisconnectFromCluster() error {
+	a.invalidateToken("disconnect")
 	a.stopAllForwards()
 	a.mu.Lock()
 	a.currentClientset = nil
 	a.currentRestConfig = nil
 	a.currentContext = ""
+	a.currentNamespace = ""
 	a.accessibleNs = nil
 	a.hostMode = false
 	a.mu.Unlock()
@@ -289,6 +303,26 @@ func (a *App) GetSettings() config.Config {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.cfg
+}
+
+// GetLogsFolder returns the absolute path to the log directory.
+func (a *App) GetLogsFolder() string {
+	dir, err := logging.Dir()
+	if err != nil {
+		log.Printf("[GetLogsFolder] %v", err)
+		return ""
+	}
+	return dir
+}
+
+// OpenLogsFolder opens the log directory in the OS file browser.
+func (a *App) OpenLogsFolder() error {
+	dir, err := logging.Dir()
+	if err != nil {
+		return err
+	}
+	log.Printf("[OpenLogsFolder] opening %s", dir)
+	return logging.OpenFolder(dir)
 }
 
 // SaveSettings persists a new configuration to disk and updates the in-memory
@@ -328,7 +362,14 @@ func (a *App) SelectNamespace(namespace string) ([]GrpcServiceInfo, error) {
 	cfg := a.cfg
 	allocator := a.allocator
 	hostMode := a.hostMode
+	previousNs := a.currentNamespace
+	currentContext := a.currentContext
+	a.currentNamespace = namespace
 	a.mu.Unlock()
+
+	if previousNs != "" && previousNs != namespace {
+		a.invalidateToken("namespace-switch")
+	}
 
 	if hostMode {
 		return a.discoverHostMachineServices(cfg)
@@ -350,83 +391,129 @@ func (a *App) SelectNamespace(namespace string) ([]GrpcServiceInfo, error) {
 	}
 	log.Printf("[SelectNamespace] Found %d candidate gRPC services", len(services))
 
-	out := make([]GrpcServiceInfo, 0, len(services))
+	// Filter excluded services up front. This pass is essentially free —
+	// just string matching — and shrinks the work for the parallel pass below.
+	kept := make([]kubernetes.GrpcService, 0, len(services))
 	for _, svc := range services {
-		if pattern, matchedOn, skip := matchExcludeAny(cfg.ServiceExcludePatterns, svc.Name, svc.AppName); skip {
-			log.Printf("[SelectNamespace] %s/%s: excluded by pattern %q (matched %s)", svc.Namespace, svc.Name, pattern, matchedOn)
+		candidates := []string{svc.Name, svc.AppName}
+		for _, v := range svc.Selector {
+			candidates = append(candidates, v)
+		}
+		if pattern, matched, skip := matchExcludeAny(cfg.ServiceExcludePatterns, candidates...); skip {
+			log.Printf("[SelectNamespace] %s/%s: excluded by pattern %q (matched %q)", svc.Namespace, svc.Name, pattern, matched)
 			continue
 		}
-		var (
-			localAddress string
-			viaNodePort  bool
-			pf           *kubernetes.PortForward
-		)
+		kept = append(kept, svc)
+	}
+	log.Printf("[SelectNamespace] %d services after exclusion; resolving in parallel", len(kept))
 
-		if svc.NodePort > 0 {
-			localAddress = fmt.Sprintf("%s:%d", cfg.NodePortHost, svc.NodePort)
-			viaNodePort = true
-			log.Printf("[SelectNamespace] %s/%s: using NodePort %s", svc.Namespace, svc.Name, localAddress)
-		} else {
-			pods, err := disco.GetServicePods(svc.Namespace, svc.Selector)
-			if err != nil {
-				log.Printf("[SelectNamespace] %s/%s: list pods failed: %v", svc.Namespace, svc.Name, err)
-				continue
-			}
-			if len(pods) == 0 {
-				log.Printf("[SelectNamespace] %s/%s: no Running pods, skipping", svc.Namespace, svc.Name)
-				continue
-			}
-			pod := pods[0]
-			pf = kubernetes.NewPortForward(allocator, svc.Namespace, pod.Name, int(svc.Port))
-			if err := pf.Start(); err != nil {
-				log.Printf("[SelectNamespace] %s/%s: port-forward failed: %v", svc.Namespace, svc.Name, err)
-				continue
-			}
-			localAddress = pf.GetLocalAddress()
-		}
+	// Process kept services in parallel. The wall-clock bottleneck is
+	// kubectl's SPDY tunnel setup (~3-4s per pod on remote clusters); doing
+	// these serially adds up fast in busy namespaces. Cap concurrency to
+	// avoid spawning N kubectl processes at once for large namespaces.
+	concurrency := cfg.DiscoveryConcurrency
+	if concurrency <= 0 {
+		concurrency = 5
+	}
+	sem := make(chan struct{}, concurrency)
+	results := make([][]GrpcServiceInfo, len(kept))
+	var wg sync.WaitGroup
+	for i, svc := range kept {
+		wg.Add(1)
+		sem <- struct{}{}
+		go func(i int, svc kubernetes.GrpcService) {
+			defer wg.Done()
+			defer func() { <-sem }()
+			results[i] = a.resolveService(svc, disco, cfg, allocator, currentContext)
+		}(i, svc)
+	}
+	wg.Wait()
 
-		reflected, err := grpcrefl.ListServices(localAddress)
+	// Flatten results in input order so the frontend sees a deterministic
+	// list across reconnects.
+	out := make([]GrpcServiceInfo, 0, len(kept))
+	for _, r := range results {
+		out = append(out, r...)
+	}
+	return out, nil
+}
+
+// resolveService runs the per-service port-forward + reflection pipeline. It
+// returns zero or more GrpcServiceInfo entries for the SERVICE dropdown.
+// Errors are logged in place; an empty return indicates a skip rather than a
+// fatal condition. Safe to call concurrently — the port allocator and
+// a.forwards mutation are both internally synchronized.
+func (a *App) resolveService(svc kubernetes.GrpcService, disco *kubernetes.ServiceDiscovery, cfg config.Config, allocator *kubernetes.PortAllocator, currentContext string) []GrpcServiceInfo {
+	var (
+		localAddress string
+		viaNodePort  bool
+		pf           *kubernetes.PortForward
+	)
+
+	if svc.NodePort > 0 {
+		localAddress = fmt.Sprintf("%s:%d", cfg.NodePortHost, svc.NodePort)
+		viaNodePort = true
+		log.Printf("[SelectNamespace] %s/%s: using NodePort %s", svc.Namespace, svc.Name, localAddress)
+	} else {
+		pods, err := disco.GetServicePods(svc.Namespace, svc.Selector)
 		if err != nil {
-			log.Printf("[SelectNamespace] %s/%s: reflection failed on %s: %v", svc.Namespace, svc.Name, localAddress, err)
-			if pf != nil {
-				pf.Stop()
-			}
-			continue
+			log.Printf("[SelectNamespace] %s/%s: list pods failed: %v", svc.Namespace, svc.Name, err)
+			return nil
 		}
-		usable := filterUsableServices(reflected)
-		if len(usable) == 0 {
-			log.Printf("[SelectNamespace] %s/%s: no usable gRPC services on %s (after filtering health/reflection)", svc.Namespace, svc.Name, localAddress)
-			if pf != nil {
-				pf.Stop()
-			}
-			continue
+		if len(pods) == 0 {
+			log.Printf("[SelectNamespace] %s/%s: no Running pods, skipping", svc.Namespace, svc.Name)
+			return nil
 		}
-
-		af := &activeForward{pf: pf, localAddress: localAddress, viaNodePort: viaNodePort}
-		a.mu.Lock()
-		a.forwards = append(a.forwards, af)
-		a.mu.Unlock()
-
-		port := portFromAddress(localAddress)
-		multiple := len(usable) > 1
-		for _, serviceName := range usable {
-			display := fmt.Sprintf("%s:%s", svc.AppName, port)
-			if multiple {
-				display = fmt.Sprintf("%s:%s · %s", svc.AppName, port, shortServiceName(serviceName))
-			}
-			out = append(out, GrpcServiceInfo{
-				DisplayName:  display,
-				ServiceName:  serviceName,
-				LocalAddress: localAddress,
-				Namespace:    svc.Namespace,
-				K8sService:   svc.Name,
-				ViaNodePort:  viaNodePort,
-			})
-			log.Printf("[SelectNamespace] %s -> %s (%s)", display, serviceName, localAddress)
+		pod := pods[0]
+		pf = kubernetes.NewPortForward(allocator, currentContext, svc.Namespace, pod.Name, int(svc.Port))
+		if err := pf.Start(); err != nil {
+			log.Printf("[SelectNamespace] %s/%s: port-forward failed: %v", svc.Namespace, svc.Name, err)
+			return nil
 		}
+		localAddress = pf.GetLocalAddress()
 	}
 
-	return out, nil
+	reflected, err := grpcrefl.ListServices(localAddress)
+	if err != nil {
+		log.Printf("[SelectNamespace] %s/%s: reflection failed on %s: %v", svc.Namespace, svc.Name, localAddress, err)
+		if pf != nil {
+			pf.Stop()
+		}
+		return nil
+	}
+	usable := filterUsableServices(reflected)
+	if len(usable) == 0 {
+		log.Printf("[SelectNamespace] %s/%s: no usable gRPC services on %s (after filtering health/reflection)", svc.Namespace, svc.Name, localAddress)
+		if pf != nil {
+			pf.Stop()
+		}
+		return nil
+	}
+
+	af := &activeForward{pf: pf, localAddress: localAddress, viaNodePort: viaNodePort}
+	a.mu.Lock()
+	a.forwards = append(a.forwards, af)
+	a.mu.Unlock()
+
+	port := portFromAddress(localAddress)
+	multiple := len(usable) > 1
+	out := make([]GrpcServiceInfo, 0, len(usable))
+	for _, serviceName := range usable {
+		display := fmt.Sprintf("%s:%s", svc.AppName, port)
+		if multiple {
+			display = fmt.Sprintf("%s:%s · %s", svc.AppName, port, shortServiceName(serviceName))
+		}
+		out = append(out, GrpcServiceInfo{
+			DisplayName:  display,
+			ServiceName:  serviceName,
+			LocalAddress: localAddress,
+			Namespace:    svc.Namespace,
+			K8sService:   svc.Name,
+			ViaNodePort:  viaNodePort,
+		})
+		log.Printf("[SelectNamespace] %s -> %s (%s)", display, serviceName, localAddress)
+	}
+	return out
 }
 
 // discoverHostMachineServices probes the host gRPC port on 127.0.0.1 and runs
@@ -573,16 +660,51 @@ func (a *App) SendGrpcRequest(localAddress, serviceName, methodName, requestBody
 // GenerateSampleRequest returns a JSON request body where zero-valued
 // primitives in the skeleton are replaced with random sample values
 // (random strings, random ints, random bools). Enum-looking strings ending
-// in `_UNSPECIFIED` are left as-is.
-func (a *App) GenerateSampleRequest(localAddress, requestType string) (string, error) {
-	if localAddress == "" || requestType == "" {
-		return "", fmt.Errorf("localAddress and requestType are required")
+// in `_UNSPECIFIED` are left as-is. When the method's request type carries
+// a (google.api.http) parent binding (e.g. {parent=o/*}), the bound field
+// is filled with values from the current JWT claims using cfg.ParentClaimMap;
+// unmapped wildcards fall back to random sample values.
+func (a *App) GenerateSampleRequest(localAddress, serviceName, methodName string) (string, error) {
+	if localAddress == "" || serviceName == "" || methodName == "" {
+		return "", fmt.Errorf("localAddress, serviceName, and methodName are required")
 	}
-	skel, err := grpcrefl.GenerateJsonSkeleton(localAddress, requestType)
+	desc, err := grpcrefl.DescribeMethod(localAddress, serviceName, methodName)
 	if err != nil {
 		return "", err
 	}
-	return grpcrefl.RandomizeSkeleton(skel)
+	skel, err := grpcrefl.GenerateJsonSkeleton(localAddress, desc.RequestType)
+	if err != nil {
+		return "", err
+	}
+	body, err := grpcrefl.RandomizeSkeleton(skel)
+	if err != nil {
+		return "", err
+	}
+	if desc.ParentField == "" || desc.ParentPattern == "" {
+		return body, nil
+	}
+
+	a.mu.Lock()
+	accessToken := a.token.AccessToken
+	claimMap := a.cfg.ParentClaimMap
+	a.mu.Unlock()
+
+	var claims map[string]any
+	if accessToken != "" {
+		c, err := auth.ParseClaims(accessToken)
+		if err != nil {
+			log.Printf("[GenerateSampleRequest] could not parse JWT claims: %v", err)
+		} else {
+			claims = c
+		}
+	}
+	filled, err := grpcrefl.ApplyParentPattern(body, desc.ParentField, desc.ParentPattern, claims, claimMap)
+	if err != nil {
+		log.Printf("[GenerateSampleRequest] applying parent pattern failed: %v", err)
+		return body, nil
+	}
+	log.Printf("[GenerateSampleRequest] applied parent binding field=%s pattern=%s", desc.ParentField, desc.ParentPattern)
+	return filled, nil
 }
 
 // AuthState is the per-call snapshot of token state surfaced to the frontend.
@@ -617,45 +739,132 @@ func (a *App) GetAuthState() AuthState {
 	return a.buildAuthStateLocked()
 }
 
-// Login performs an OIDC password-grant against the configured token endpoint
-// and starts the refresh scheduler. The returned AuthState reflects the new
-// token.
-func (a *App) Login(username, password string) (AuthState, error) {
+// AuthEndpointInfo is the per-call snapshot of the active auth endpoint,
+// surfaced so the login modal can decide whether to show the subdomain field
+// and preview a resolved realm.
+type AuthEndpointInfo struct {
+	Found            bool   `json:"found"`
+	Cluster          string `json:"cluster"`
+	Namespace        string `json:"namespace"`
+	TokenURL         string `json:"tokenUrl"`
+	RealmResolverURL string `json:"realmResolverUrl"`
+	RealmJSONPath    string `json:"realmJsonPath"`
+	NeedsSubdomain   bool   `json:"needsSubdomain"`
+}
+
+// GetActiveAuthEndpoint returns the auth endpoint matching the currently
+// connected (cluster, namespace), or Found=false if none is configured. The
+// frontend uses this to render the right login-modal state.
+func (a *App) GetActiveAuthEndpoint() AuthEndpointInfo {
 	a.mu.Lock()
+	cluster := a.currentContext
+	ns := a.currentNamespace
 	cfg := a.cfg
 	a.mu.Unlock()
 
-	log.Printf("[Login] Requesting token for user=%q endpoint=%s", username, cfg.TokenEndpoint)
-	ts, err := auth.Login(cfg.TokenEndpoint, cfg.ClientID, username, password)
+	ep, ok := cfg.MatchAuthEndpoint(cluster, ns)
+	if !ok {
+		return AuthEndpointInfo{Found: false, Cluster: cluster, Namespace: ns}
+	}
+	return AuthEndpointInfo{
+		Found:            true,
+		Cluster:          cluster,
+		Namespace:        ns,
+		TokenURL:         ep.TokenURL,
+		RealmResolverURL: ep.RealmResolverURL,
+		RealmJSONPath:    ep.RealmJSONPath,
+		NeedsSubdomain:   ep.RealmResolverURL != "",
+	}
+}
+
+// ResolveRealm calls the active endpoint's realm resolver with the given
+// subdomain and returns the realm name. Used by the login modal for live
+// preview after the user enters a subdomain.
+func (a *App) ResolveRealm(subdomain string) (string, error) {
+	a.mu.Lock()
+	cluster := a.currentContext
+	ns := a.currentNamespace
+	cfg := a.cfg
+	a.mu.Unlock()
+
+	ep, ok := cfg.MatchAuthEndpoint(cluster, ns)
+	if !ok {
+		return "", fmt.Errorf("no auth endpoint configured for %s / %s", cluster, ns)
+	}
+	if ep.RealmResolverURL == "" {
+		return "", fmt.Errorf("active endpoint has no realm resolver configured")
+	}
+	return auth.ResolveRealm(ep.RealmResolverURL, subdomain, ep.RealmJSONPath)
+}
+
+// Login performs an OIDC password-grant. It looks up the auth endpoint for
+// the currently connected (cluster, namespace), resolves the realm from the
+// subdomain when configured, substitutes it into the token URL, and posts
+// credentials. Empty subdomain is allowed when the endpoint has no resolver.
+func (a *App) Login(subdomain, username, password string) (AuthState, error) {
+	a.mu.Lock()
+	cluster := a.currentContext
+	ns := a.currentNamespace
+	cfg := a.cfg
+	a.mu.Unlock()
+
+	ep, ok := cfg.MatchAuthEndpoint(cluster, ns)
+	if !ok {
+		return AuthState{}, fmt.Errorf("no auth endpoint configured for %s / %s — open Settings to add one", cluster, ns)
+	}
+	if ep.TokenURL == "" {
+		return AuthState{}, fmt.Errorf("token URL is empty for %s / %s", cluster, ns)
+	}
+
+	tokenURL := ep.TokenURL
+	if strings.Contains(tokenURL, "{realm}") {
+		if ep.RealmResolverURL == "" {
+			return AuthState{}, fmt.Errorf("token URL has {realm} but no realm resolver is configured")
+		}
+		realm, err := auth.ResolveRealm(ep.RealmResolverURL, subdomain, ep.RealmJSONPath)
+		if err != nil {
+			log.Printf("[Login] realm resolution failed: %v", err)
+			return AuthState{}, fmt.Errorf("realm resolution failed: %w", err)
+		}
+		tokenURL = strings.ReplaceAll(tokenURL, "{realm}", realm)
+		log.Printf("[Login] resolved realm=%q for subdomain=%q", realm, subdomain)
+	}
+
+	log.Printf("[Login] Requesting token for user=%q endpoint=%s", username, tokenURL)
+	ts, err := auth.Login(tokenURL, cfg.ClientID, username, password)
 	if err != nil {
 		log.Printf("[Login] Failed: %v", err)
 		return AuthState{}, err
 	}
-	a.applyToken(ts, username, "login")
+	a.applyToken(ts, username, tokenURL, "login")
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.buildAuthStateLocked(), nil
 }
 
 // RefreshToken trades the current refresh token for a new access token on
-// demand. Used by the manual refresh button in the UI.
+// demand, reusing the same token URL that was resolved at login time.
 func (a *App) RefreshToken() (AuthState, error) {
 	a.mu.Lock()
 	cfg := a.cfg
 	rt := a.token.RefreshToken
 	user := a.tokenUser
+	tokenURL := a.tokenURL
 	a.mu.Unlock()
 
 	if rt == "" {
 		return AuthState{}, fmt.Errorf("no refresh token available — please log in again")
 	}
+	if tokenURL == "" {
+		return AuthState{}, fmt.Errorf("no token URL retained from login — please log in again")
+	}
 	log.Printf("[RefreshToken] Refreshing token for user=%q", user)
-	ts, err := auth.Refresh(cfg.TokenEndpoint, cfg.ClientID, rt)
+	ts, err := auth.Refresh(tokenURL, cfg.ClientID, rt)
 	if err != nil {
 		log.Printf("[RefreshToken] Failed: %v", err)
 		return AuthState{}, err
 	}
-	a.applyToken(ts, user, "manual-refresh")
+	a.applyToken(ts, user, tokenURL, "manual-refresh")
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	return a.buildAuthStateLocked(), nil
@@ -664,25 +873,41 @@ func (a *App) RefreshToken() (AuthState, error) {
 // Logout clears the in-memory token and cancels the refresh scheduler. The UI
 // is responsible for closing any token-dependent panels.
 func (a *App) Logout() {
-	log.Println("[Logout] Clearing token")
+	a.invalidateToken("logout")
+}
+
+// invalidateToken clears the token state and emits "token:cleared". Used both
+// for explicit logout and on cluster/namespace switches where the previous
+// token is bound to a (potentially) different realm.
+func (a *App) invalidateToken(reason string) {
 	a.cancelRefreshLocked()
 	a.mu.Lock()
+	hadToken := a.token.AccessToken != ""
 	a.token = auth.TokenSet{}
 	a.tokenUser = ""
+	a.tokenURL = ""
 	state := a.buildAuthStateLocked()
 	a.mu.Unlock()
+	if hadToken {
+		log.Printf("[invalidateToken] cleared (%s)", reason)
+	}
 	a.emitAuthEvent("token:cleared", state)
 }
 
 // applyToken stores a new TokenSet, restarts the refresh scheduler, and emits
-// a "token:refreshed" event so the frontend can update its store.
-func (a *App) applyToken(ts auth.TokenSet, username, source string) {
+// a "token:refreshed" event so the frontend can update its store. tokenURL is
+// the resolved URL used for this token (post-{realm}-substitution); it's
+// retained so the auto-refresher can reuse it.
+func (a *App) applyToken(ts auth.TokenSet, username, tokenURL, source string) {
 	a.cancelRefreshLocked()
 
 	a.mu.Lock()
 	a.token = ts
 	if username != "" {
 		a.tokenUser = username
+	}
+	if tokenURL != "" {
+		a.tokenURL = tokenURL
 	}
 	state := a.buildAuthStateLocked()
 	a.mu.Unlock()
@@ -729,11 +954,17 @@ func (a *App) scheduleRefresh(expiresIn int) {
 		cfg := a.cfg
 		rt := a.token.RefreshToken
 		user := a.tokenUser
+		tokenURL := a.tokenURL
 		refreshExp := a.token.RefreshExpiresAt()
 		a.mu.Unlock()
 
 		if rt == "" {
 			log.Println("[scheduleRefresh] no refresh token; cannot continue")
+			a.emitAuthEvent("token:expired", AuthState{Username: user})
+			return
+		}
+		if tokenURL == "" {
+			log.Println("[scheduleRefresh] no retained token URL; cannot continue")
 			a.emitAuthEvent("token:expired", AuthState{Username: user})
 			return
 		}
@@ -743,13 +974,13 @@ func (a *App) scheduleRefresh(expiresIn int) {
 			return
 		}
 
-		ts, err := auth.Refresh(cfg.TokenEndpoint, cfg.ClientID, rt)
+		ts, err := auth.Refresh(tokenURL, cfg.ClientID, rt)
 		if err != nil {
 			log.Printf("[scheduleRefresh] refresh failed: %v", err)
 			a.emitAuthEvent("token:expired", AuthState{Username: user})
 			return
 		}
-		a.applyToken(ts, user, "auto-refresh")
+		a.applyToken(ts, user, tokenURL, "auto-refresh")
 	}()
 }
 
@@ -773,13 +1004,12 @@ func (a *App) emitAuthEvent(event string, state AuthState) {
 }
 
 // matchExcludeAny tries every pattern against every candidate name. It returns
-// the matching pattern, a label identifying which candidate matched (for log
+// the matching pattern, the actual candidate string that matched (for log
 // readability), and true if any candidate hit. Empty candidates and patterns
 // are skipped. Invalid glob patterns fall back to substring match so a typo'd
 // entry still does *something* useful instead of silently failing.
 func matchExcludeAny(patterns []string, candidates ...string) (string, string, bool) {
-	labels := []string{"name", "appName", "extra"}
-	for i, candidate := range candidates {
+	for _, candidate := range candidates {
 		if candidate == "" {
 			continue
 		}
@@ -793,23 +1023,16 @@ func matchExcludeAny(patterns []string, candidates ...string) (string, string, b
 			matched, err := path.Match(lp, lname)
 			if err != nil {
 				if strings.Contains(lname, strings.Trim(lp, "*")) {
-					return p, label(labels, i), true
+					return p, candidate, true
 				}
 				continue
 			}
 			if matched {
-				return p, label(labels, i), true
+				return p, candidate, true
 			}
 		}
 	}
 	return "", "", false
-}
-
-func label(labels []string, i int) string {
-	if i < len(labels) {
-		return labels[i]
-	}
-	return fmt.Sprintf("candidate[%d]", i)
 }
 
 func portFromAddress(addr string) string {

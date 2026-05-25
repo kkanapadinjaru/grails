@@ -1,14 +1,37 @@
 export namespace config {
 	
+	export class AuthEndpoint {
+	    cluster: string;
+	    namespace: string;
+	    tokenUrl: string;
+	    realmResolverUrl: string;
+	    realmJsonPath: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new AuthEndpoint(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.cluster = source["cluster"];
+	        this.namespace = source["namespace"];
+	        this.tokenUrl = source["tokenUrl"];
+	        this.realmResolverUrl = source["realmResolverUrl"];
+	        this.realmJsonPath = source["realmJsonPath"];
+	    }
+	}
 	export class Config {
 	    namespaces: string[];
 	    portRangeStart: number;
 	    portRangeEnd: number;
 	    grpcPorts: number[];
+	    discoveryConcurrency: number;
 	    nodePortHost: string;
-	    tokenEndpoint: string;
+	    authProvider: string;
 	    clientId: string;
+	    authEndpoints: AuthEndpoint[];
 	    serviceExcludePatterns: string[];
+	    parentClaimMap: Record<string, string>;
 	
 	    static createFrom(source: any = {}) {
 	        return new Config(source);
@@ -20,17 +43,62 @@ export namespace config {
 	        this.portRangeStart = source["portRangeStart"];
 	        this.portRangeEnd = source["portRangeEnd"];
 	        this.grpcPorts = source["grpcPorts"];
+	        this.discoveryConcurrency = source["discoveryConcurrency"];
 	        this.nodePortHost = source["nodePortHost"];
-	        this.tokenEndpoint = source["tokenEndpoint"];
+	        this.authProvider = source["authProvider"];
 	        this.clientId = source["clientId"];
+	        this.authEndpoints = this.convertValues(source["authEndpoints"], AuthEndpoint);
 	        this.serviceExcludePatterns = source["serviceExcludePatterns"];
+	        this.parentClaimMap = source["parentClaimMap"];
 	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
 	}
 
 }
 
 export namespace main {
 	
+	export class AuthEndpointInfo {
+	    found: boolean;
+	    cluster: string;
+	    namespace: string;
+	    tokenUrl: string;
+	    realmResolverUrl: string;
+	    realmJsonPath: string;
+	    needsSubdomain: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new AuthEndpointInfo(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.found = source["found"];
+	        this.cluster = source["cluster"];
+	        this.namespace = source["namespace"];
+	        this.tokenUrl = source["tokenUrl"];
+	        this.realmResolverUrl = source["realmResolverUrl"];
+	        this.realmJsonPath = source["realmJsonPath"];
+	        this.needsSubdomain = source["needsSubdomain"];
+	    }
+	}
 	export class AuthState {
 	    loggedIn: boolean;
 	    username: string;

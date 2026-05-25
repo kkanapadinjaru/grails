@@ -2,6 +2,9 @@ package main
 
 import (
 	"embed"
+	"log"
+
+	"grails/logging"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -12,6 +15,10 @@ import (
 var assets embed.FS
 
 func main() {
+	if _, err := logging.Setup(); err != nil {
+		log.Printf("[main] logging setup failed, continuing with stdout only: %v", err)
+	}
+
 	// Create an instance of the app structure
 	app := NewApp()
 

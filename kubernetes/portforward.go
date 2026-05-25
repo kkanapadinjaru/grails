@@ -1,7 +1,9 @@
 package kubernetes
 
 import (
+	"bufio"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os/exec"
@@ -81,11 +83,12 @@ func portFree(port int) bool {
 // pod. Local port selection is delegated to a PortAllocator; the same port is
 // released on Stop.
 type PortForward struct {
-	namespace  string
-	podName    string
-	localPort  int
-	remotePort int
-	allocator  *PortAllocator
+	contextName string
+	namespace   string
+	podName     string
+	localPort   int
+	remotePort  int
+	allocator   *PortAllocator
 
 	mu      sync.Mutex
 	running bool
@@ -93,17 +96,33 @@ type PortForward struct {
 }
 
 // NewPortForward builds a forwarder; call Start to actually launch kubectl.
-func NewPortForward(allocator *PortAllocator, namespace, podName string, remotePort int) *PortForward {
+// contextName is passed via --context so kubectl uses the same cluster the
+// caller discovered the pod from, regardless of the kubeconfig's
+// current-context. Empty contextName falls back to the kubeconfig default.
+func NewPortForward(allocator *PortAllocator, contextName, namespace, podName string, remotePort int) *PortForward {
 	return &PortForward{
-		namespace:  namespace,
-		podName:    podName,
-		remotePort: remotePort,
-		allocator:  allocator,
+		contextName: contextName,
+		namespace:   namespace,
+		podName:     podName,
+		remotePort:  remotePort,
+		allocator:   allocator,
 	}
 }
 
+// readyTimeout is how long we wait for kubectl's tunnel to start accepting
+// TCP connections before giving up on a single attempt. AKS-style clusters
+// can take several seconds to set up the SPDY stream after writing the
+// "Forwarding from..." line; a short fixed sleep is not enough.
+const readyTimeout = 10 * time.Second
+
 // Start picks a free local port (retrying up to maxAttempts times if kubectl
 // fails to bind it) and launches `kubectl port-forward` in the background.
+// kubectl's stdout/stderr are streamed to our log so binding failures are
+// visible. We declare success only after a TCP dial to the local port
+// succeeds — kubectl prints "Forwarding from..." optimistically, but the
+// actual tunnel may not be ready for a few hundred ms (longer on remote
+// clusters), so trusting that line alone leads to "actively refused" errors
+// when grpcurl races us.
 func (pf *PortForward) Start() error {
 	pf.mu.Lock()
 	if pf.running {
@@ -120,13 +139,30 @@ func (pf *PortForward) Start() error {
 			return fmt.Errorf("port allocation failed: %w", err)
 		}
 
-		args := []string{
-			"port-forward",
+		// --address 127.0.0.1 forces IPv4 binding. Without it kubectl may bind
+		// only to [::1] on some Windows configurations, which grpcurl (dialing
+		// 127.0.0.1) cannot reach.
+		args := []string{"port-forward", "--address", "127.0.0.1"}
+		if pf.contextName != "" {
+			args = append(args, "--context", pf.contextName)
+		}
+		args = append(args,
 			"-n", pf.namespace,
 			fmt.Sprintf("pod/%s", pf.podName),
 			fmt.Sprintf("%d:%d", port, pf.remotePort),
-		}
+		)
 		cmd := exec.Command("kubectl", args...)
+
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			pf.allocator.Release(port)
+			return fmt.Errorf("stdout pipe: %w", err)
+		}
+		stderr, err := cmd.StderrPipe()
+		if err != nil {
+			pf.allocator.Release(port)
+			return fmt.Errorf("stderr pipe: %w", err)
+		}
 
 		log.Printf("[PortForward] attempt %d: kubectl %v", attempt, args)
 		if err := cmd.Start(); err != nil {
@@ -135,12 +171,15 @@ func (pf *PortForward) Start() error {
 			continue
 		}
 
-		// Give kubectl a moment to bind. If it dies immediately (port still in
-		// use, pod gone, etc.) retry with another port.
-		time.Sleep(1500 * time.Millisecond)
-		if cmd.ProcessState != nil && cmd.ProcessState.Exited() {
+		go streamLines(stdout, fmt.Sprintf("[PortForward:%d/stdout]", port))
+		go streamLines(stderr, fmt.Sprintf("[PortForward:%d/stderr]", port))
+
+		if err := waitForListening(port, readyTimeout); err != nil {
+			log.Printf("[PortForward] port %d never came up: %v; killing kubectl and retrying", port, err)
+			_ = cmd.Process.Kill()
+			_, _ = cmd.Process.Wait()
 			pf.allocator.Release(port)
-			lastErr = fmt.Errorf("kubectl exited immediately on port %d", port)
+			lastErr = err
 			continue
 		}
 
@@ -153,6 +192,34 @@ func (pf *PortForward) Start() error {
 		return nil
 	}
 	return fmt.Errorf("port-forward failed after %d attempts: %v", maxAttempts, lastErr)
+}
+
+// streamLines copies a kubectl pipe to our log, line-by-line. Returns when
+// the pipe hits EOF (kubectl exited or was killed).
+func streamLines(r io.Reader, prefix string) {
+	scanner := bufio.NewScanner(r)
+	for scanner.Scan() {
+		log.Printf("%s %s", prefix, scanner.Text())
+	}
+}
+
+// waitForListening polls a TCP dial against 127.0.0.1:port until it succeeds
+// or the timeout elapses. Used to confirm kubectl actually bound the port,
+// not just printed its readiness line.
+func waitForListening(port int, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	addr := fmt.Sprintf("127.0.0.1:%d", port)
+	var lastErr error
+	for time.Now().Before(deadline) {
+		conn, err := net.DialTimeout("tcp", addr, 300*time.Millisecond)
+		if err == nil {
+			conn.Close()
+			return nil
+		}
+		lastErr = err
+		time.Sleep(200 * time.Millisecond)
+	}
+	return fmt.Errorf("port not listening after %s: %v", timeout, lastErr)
 }
 
 // Stop terminates the kubectl child and releases the allocated port.

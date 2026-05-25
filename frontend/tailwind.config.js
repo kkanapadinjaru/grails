@@ -9,24 +9,24 @@ export default {
     extend: {
       colors: {
         bg: {
-          light: '#eff1f5',
-          dark: '#24273a',
+          light: 'var(--color-bg-light)',
+          dark: 'var(--color-bg-dark)',
         },
         btn: {
-          light: '#1e66f5',
-          dark: '#8aadf4',
+          light: 'var(--color-btn-light)',
+          dark: 'var(--color-btn-dark)',
         },
         hi: {
-          light: '#bdd6fb',
-          dark: '#1d2d55',
+          light: 'var(--color-hi-light)',
+          dark: 'var(--color-hi-dark)',
         },
         sidebar: {
-          light: '#e6e9ef',
-          dark: '#1e2030',
+          light: 'var(--color-sidebar-light)',
+          dark: 'var(--color-sidebar-dark)',
         },
         text: {
-          light: '#4c4f69',
-          dark: '#cad3f5',
+          light: 'var(--color-text-light)',
+          dark: 'var(--color-text-dark)',
         },
         primary: {
           DEFAULT: '#3B82F6',

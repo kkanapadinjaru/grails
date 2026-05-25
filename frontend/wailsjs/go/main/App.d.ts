@@ -11,9 +11,11 @@ export function DisconnectFromCluster():Promise<void>;
 
 export function GenerateRequestSkeleton(arg1:string,arg2:string):Promise<string>;
 
-export function GenerateSampleRequest(arg1:string,arg2:string):Promise<string>;
+export function GenerateSampleRequest(arg1:string,arg2:string,arg3:string):Promise<string>;
 
 export function GetAccessibleNamespaces():Promise<Array<string>>;
+
+export function GetActiveAuthEndpoint():Promise<main.AuthEndpointInfo>;
 
 export function GetAuthState():Promise<main.AuthState>;
 
@@ -21,15 +23,21 @@ export function GetClusters():Promise<Array<main.ClusterInfo>>;
 
 export function GetGrpcMethods(arg1:string,arg2:string):Promise<Array<string>>;
 
+export function GetLogsFolder():Promise<string>;
+
 export function GetSettings():Promise<config.Config>;
 
 export function IsConnected():Promise<boolean>;
 
-export function Login(arg1:string,arg2:string):Promise<main.AuthState>;
+export function Login(arg1:string,arg2:string,arg3:string):Promise<main.AuthState>;
 
 export function Logout():Promise<void>;
 
+export function OpenLogsFolder():Promise<void>;
+
 export function RefreshToken():Promise<main.AuthState>;
+
+export function ResolveRealm(arg1:string):Promise<string>;
 
 export function SaveSettings(arg1:config.Config):Promise<void>;
 

@@ -46,11 +46,11 @@ export function closeLogin() {
   auth.loginError = ''
 }
 
-export async function login(username, password) {
+export async function login(subdomain, username, password) {
   auth.isGeneratingToken = true
   auth.loginError = ''
   try {
-    const state = await LoginCall(username, password)
+    const state = await LoginCall(subdomain || '', username, password)
     applyState(state)
     addInfo(`Logged in as ${auth.username}`)
     return true

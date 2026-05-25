@@ -7,7 +7,7 @@
     connection.services.find(s => s.displayName === connection.selectedService)
   )
 
-  let authRequired = $derived(!!settings.tokenEndpoint && !!settings.clientId)
+  let authRequired = $derived((settings.authEndpoints || []).length > 0 && !!settings.clientId)
 
   let canSend = $derived(
     !!connection.selectedService && !!connection.selectedMethod && !connection.isSending

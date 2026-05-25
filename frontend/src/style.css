@@ -2,6 +2,78 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Catppuccin (default — Latte light, Macchiato dark). Each palette below
+   defines a light + dark pair; the .dark class on <html> selects the dark
+   column, the data-palette attribute selects which palette is active. */
+:root {
+  --color-bg-light: #eff1f5;
+  --color-bg-dark: #24273a;
+  --color-sidebar-light: #e6e9ef;
+  --color-sidebar-dark: #1e2030;
+  --color-text-light: #4c4f69;
+  --color-text-dark: #cad3f5;
+  --color-btn-light: #1e66f5;
+  --color-btn-dark: #8aadf4;
+  --color-hi-light: #bdd6fb;
+  --color-hi-dark: #1d2d55;
+}
+
+/* One Dark Pro — Atom / VS Code's iconic palette. */
+:root[data-palette="one-dark-pro"] {
+  --color-bg-light: #fafafa;
+  --color-bg-dark: #282c34;
+  --color-sidebar-light: #f0f0f0;
+  --color-sidebar-dark: #21252b;
+  --color-text-light: #383a42;
+  --color-text-dark: #abb2bf;
+  --color-btn-light: #4078f2;
+  --color-btn-dark: #61afef;
+  --color-hi-light: #d2e0fb;
+  --color-hi-dark: #2c313a;
+}
+
+/* Tokyo Night — Folke's deep-navy palette. Light variant is Tokyo Night Day. */
+:root[data-palette="tokyo-night"] {
+  --color-bg-light: #d5d6db;
+  --color-bg-dark: #1a1b26;
+  --color-sidebar-light: #cbccd1;
+  --color-sidebar-dark: #16161e;
+  --color-text-light: #343b58;
+  --color-text-dark: #a9b1d6;
+  --color-btn-light: #34548a;
+  --color-btn-dark: #7aa2f7;
+  --color-hi-light: #bcc0d6;
+  --color-hi-dark: #283457;
+}
+
+/* Dracula — bold purple on midnight. Light variant is Alucard. */
+:root[data-palette="dracula"] {
+  --color-bg-light: #f8f8f2;
+  --color-bg-dark: #282a36;
+  --color-sidebar-light: #efece2;
+  --color-sidebar-dark: #21222c;
+  --color-text-light: #1f1f1f;
+  --color-text-dark: #f8f8f2;
+  --color-btn-light: #6e3eb1;
+  --color-btn-dark: #bd93f9;
+  --color-hi-light: #e8d8ff;
+  --color-hi-dark: #44475a;
+}
+
+/* Nebula — indigo drift, dark navy to lavender mist. */
+:root[data-palette="nebula"] {
+  --color-bg-light: #f5f5ff;
+  --color-bg-dark: #1a1a40;
+  --color-sidebar-light: #d3d3e6;
+  --color-sidebar-dark: #13132f;
+  --color-text-light: #1a1a40;
+  --color-text-dark: #d3d3e6;
+  --color-btn-light: #3f3f70;
+  --color-btn-dark: #7070a3;
+  --color-hi-light: #e6e6f5;
+  --color-hi-dark: #3f3f70;
+}
+
 html, body, #app {
   height: 100%;
   margin: 0;
